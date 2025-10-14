@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giải Bài Toán Người Du Lịch (TSP)</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗺️ GIẢI BÀI TOÁN NGƯỜI DU LỊCH (TSP)</h1>
+            <p class="subtitle">So sánh thuật toán Backtracking (simpleAI) và ACO (Ant Colony Optimization)</p>
+        </header>
+
+        <div class="main-grid">
+             Left Panel - Controls 
+            <div class="panel">
+                <div class="panel-title">⚙️ Cấu hình</div>
+                
+                 Tabs for different input methods 
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('default')">Mặc định</button>
+                    <button class="tab" onclick="switchTab('manual')">Nhập tay</button>
+                    <button class="tab" onclick="switchTab('csv')">File CSV</button>
+                </div>
+
+                 Default cities tab 
+                <div id="tab-default" class="tab-content active">
+                    <h3 style="font-size: 1rem; margin-bottom: 12px; color: #ccc;">Danh sách thành phố</h3>
+                    <div class="cities-list" id="citiesList">
+                         Will be populated by JavaScript 
+                    </div>
+                </div>
+
+                 Manual input tab 
+                <div id="tab-manual" class="tab-content">
+                    <h3 style="font-size: 1rem; margin-bottom: 12px; color: #ccc;">Nhập tọa độ thành phố</h3>
+                    <div class="cities-editor" id="citiesEditor">
+                         Will be populated by JavaScript 
+                    </div>
+                    <button class="btn btn-add btn-small" onclick="addCityRow()" style="width: 100%;">
+                        ➕ Thêm thành phố
+                    </button>
+                    <div style="margin-top: 12px; font-size: 0.85rem; color: #999;">
+                        💡 Nhập tên thành phố, kinh độ (longitude) và vĩ độ (latitude)
+                    </div>
+                </div>
+
+                 CSV upload tab 
+                <div id="tab-csv" class="tab-content">
+                    <h3 style="font-size: 1rem; margin-bottom: 12px; color: #ccc;">Tải file CSV</h3>
+                    <div class="file-upload" onclick="document.getElementById('csvFile').click()">
+                        <input type="file" id="csvFile" accept=".csv" onchange="handleCSVUpload(event)">
+                        <div class="file-upload-icon">📁</div>
+                        <div style="color: #f7d046; font-weight: 600; margin-bottom: 4px;">Nhấn để chọn file CSV</div>
+                        <div style="color: #999; font-size: 0.9rem;">hoặc kéo thả file vào đây</div>
+                    </div>
+                    <div id="csvInfo" style="display: none;" class="file-info">
+                         CSV file info will be shown here 
+                    </div>
+                    <div class="csv-example">
+                        <strong style="color: #f7d046;">Định dạng CSV:</strong><br>
+                        name,longitude,latitude<br>
+                        Hà Nội,105.8,21.0<br>
+                        Hải Phòng,106.7,20.8<br>
+                        Đà Nẵng,108.2,16.0
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <h3 style="font-size: 1rem; margin-bottom: 12px; color: #ccc;">Tham số thuật toán ACO</h3>
+                <div class="params-grid">
+                    <div class="input-group">
+                        <label for="nAnts">Số lượng kiến</label>
+                        <input type="number" id="nAnts" value="30" min="10" max="100">
+                    </div>
+                    <div class="input-group">
+                        <label for="nIterations">Số iterations</label>
+                        <input type="number" id="nIterations" value="100" min="50" max="500">
+                    </div>
+                    <div class="input-group">
+                        <label for="alpha">Alpha (α)</label>
+                        <input type="number" id="alpha" value="1.0" step="0.1" min="0.1" max="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="beta">Beta (β)</label>
+                        <input type="number" id="beta" value="2.0" step="0.1" min="0.1" max="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="evaporation">Evaporation (ρ)</label>
+                        <input type="number" id="evaporation" value="0.5" step="0.1" min="0.1" max="0.9">
+                    </div>
+                    <div class="input-group">
+                        <label for="q">Q (hằng số)</label>
+                        <input type="number" id="q" value="100" min="10" max="1000">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="solveBtn" onclick="solveTSP()">
+                    🚀 Giải bài toán
+                </button>
+                <button class="btn btn-secondary" id="compareBtn" onclick="showComparison()" disabled>
+                    📊 So sánh kết quả
+                </button>
+
+                <div class="results-box" id="resultsBox">
+                    <div style="color: #666; text-align: center; padding: 20px;">
+                        Nhấn "Giải bài toán" để bắt đầu...
+                    </div>
+                </div>
+            </div>
+
+             Right Panel - Visualization 
+            <div class="panel">
+                <div class="panel-title">📈 Trực quan hóa</div>
+                <div class="loading" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <div>Đang xử lý...</div>
+                </div>
+                <div class="visualization-grid" id="visualizationGrid">
+                    <div class="viz-panel">
+                        <div class="viz-title">Vị trí các thành phố</div>
+                        <canvas id="citiesCanvas"></canvas>
+                    </div>
+                    <div class="viz-panel">
+                        <div class="viz-title">Tuyến đường Backtracking</div>
+                        <canvas id="backtrackingCanvas"></canvas>
+                    </div>
+                    <div class="viz-panel">
+                        <div class="viz-title">Tuyến đường ACO</div>
+                        <canvas id="acoCanvas"></canvas>
+                    </div>
+                    <div class="viz-panel">
+                        <div class="viz-title">Quá trình hội tụ ACO</div>
+                        <canvas id="convergenceCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
