@@ -1,9 +1,8 @@
 """
-Travelling Salesman Problem - Backtracking Solution using simpleAI
-Giải bài toán người du lịch bằng thuật toán quay lui với thư viện simpleAI
+Travelling Salesman Problem - Backtracking Solution (custom implementation)
+Giải bài toán người du lịch bằng thuật toán quay lui (không dùng simpleAI)
 """
 
-from simpleai.search import CspProblem, backtrack
 import time
 import numpy as np
 
@@ -38,72 +37,97 @@ class TSPBacktracking:
     
     def solve(self):
         """
-        Giải bài toán TSP bằng Backtracking với simpleAI
-        Sử dụng CSP (Constraint Satisfaction Problem) framework
+        Giải bài toán TSP bằng Backtracking (tự triển khai)
+        Thuật toán: Depth-first search (hoặc brute-force với pruning theo best_distance)
         """
         start_time = time.time()
-        
-        # Định nghĩa biến: mỗi vị trí trong tuyến đường
+        # Implement a minimal CSP-style backtracking framework here so code
+        # explicitly uses variables, domains, constraints and an assignment.
+
+        # Variables: position_0 ... position_{n-1}
         variables = [f'position_{i}' for i in range(self.n_cities)]
-        
-        # Định nghĩa miền giá trị: các thành phố có thể đi
+
+        # Domains: all cities for each variable
         domains = {var: list(self.cities) for var in variables}
-        
-        # Định nghĩa ràng buộc: mỗi thành phố chỉ được đi qua một lần
-        def constraint_all_different(variables, values):
-            """Ràng buộc: tất cả các thành phố phải khác nhau"""
-            return len(values) == len(set(values))
-        
-        def constraint_optimize_distance(variables, values):
-            """Ràng buộc: tối ưu hóa khoảng cách"""
-            if len(values) < 2:
+
+        # Constraints: functions that accept (assignment) partial dict and return True/False
+        def all_different(assignment):
+            # All assigned values must be unique
+            vals = list(assignment.values())
+            return len(vals) == len(set(vals))
+
+        def partial_distance_constraint(assignment):
+            # For any consecutive assigned positions, the partial accumulated distance
+            # should not exceed the current best distance (pruning)
+            # Build ordered list of assigned positions by position index
+            if not assignment:
                 return True
-            # Kiểm tra khoảng cách tích lũy không vượt quá best_distance hiện tại
-            partial_distance = 0
-            for i in range(len(values) - 1):
-                city1 = self.cities.index(values[i])
-                city2 = self.cities.index(values[i + 1])
-                partial_distance += self.distance_matrix[city1][city2]
-                if partial_distance >= self.best_distance:
+            # Extract assigned positions and their numeric indices
+            assigned = []
+            for var, val in assignment.items():
+                idx = int(var.split('_')[1])
+                assigned.append((idx, val))
+            assigned.sort()
+
+            # compute partial distance along the assigned prefix
+            partial = 0
+            for i in range(len(assigned) - 1):
+                a_city = assigned[i][1]
+                b_city = assigned[i+1][1]
+                a_idx = self.cities.index(a_city)
+                b_idx = self.cities.index(b_city)
+                partial += self.distance_matrix[a_idx][b_idx]
+                if partial >= self.best_distance:
                     return False
             return True
-        
-        # Tạo danh sách ràng buộc
-        constraints = []
-        
-        # Ràng buộc tất cả các thành phố phải khác nhau
-        constraints.append((variables, constraint_all_different))
-        
-        # Ràng buộc tối ưu hóa khoảng cách cho mỗi cặp liên tiếp
-        for i in range(len(variables) - 1):
-            constraints.append((variables[:i+2], constraint_optimize_distance))
-        
-        # Tạo bài toán CSP
-        problem = CspProblem(variables, domains, constraints)
-        
-        # Giải bài toán bằng backtracking
-        try:
-            # Tìm tất cả các giải pháp và chọn tốt nhất
-            solution = backtrack(problem)
-            
-            if solution:
-                # Chuyển đổi solution thành route
-                route = [solution[var] for var in variables]
-                distance = self.calculate_route_distance(route)
-                
-                self.best_route = route
-                self.best_distance = distance
-        except:
-            # Nếu không tìm được giải pháp tối ưu, sử dụng greedy approach
-            self.greedy_fallback()
+
+        constraints = [all_different, partial_distance_constraint]
+
+        # Backtracking driver: assign variables in order
+        assignment = {}
+
+        def is_consistent(assignment):
+            # Evaluate all constraints on the current partial assignment
+            for c in constraints:
+                try:
+                    if not c(assignment):
+                        return False
+                except Exception:
+                    return False
+            return True
+
+        def backtrack_var(idx):
+            # idx: index of variable to assign
+            if idx >= len(variables):
+                # full assignment -> evaluate total distance including return-to-start
+                route = [assignment[var] for var in variables]
+                dist = self.calculate_route_distance(route)
+                if dist < self.best_distance:
+                    self.best_distance = dist
+                    self.best_route = route.copy()
+                return
+
+            var = variables[idx]
+            for value in domains[var]:
+                # try assign
+                assignment[var] = value
+                if is_consistent(assignment):
+                    backtrack_var(idx+1)
+                # undo
+                assignment.pop(var, None)
+
+        # To reduce symmetric solutions, fix starting position to first city
+        assignment[variables[0]] = self.cities[0]
+        if is_consistent(assignment):
+            backtrack_var(1)
         
         self.execution_time = time.time() - start_time
-        
+
         return {
             'route': self.best_route,
             'distance': self.best_distance,
             'time': self.execution_time,
-            'algorithm': 'Backtracking (simpleAI)'
+            'algorithm': 'Backtracking (custom)'
         }
     
     def greedy_fallback(self):
