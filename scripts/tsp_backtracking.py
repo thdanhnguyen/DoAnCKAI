@@ -1,13 +1,13 @@
 """
-Travelling Salesman Problem - Backtracking Solution (custom implementation)
-Giải bài toán người du lịch bằng thuật toán quay lui (không dùng simpleAI)
+Travelling Salesman Problem - Backtracking Solution (No Library)
+Giải bài toán người du lịch bằng thuật toán quay lui thuần túy
 """
 
 import time
-import numpy as np
+from typing import List, Tuple
 
 class TSPBacktracking:
-    def __init__(self, cities, distance_matrix):
+    def __init__(self, cities: List[str], distance_matrix):
         """
         Khởi tạo bài toán TSP với Backtracking
         
@@ -21,153 +21,112 @@ class TSPBacktracking:
         self.best_route = None
         self.best_distance = float('inf')
         self.execution_time = 0
+        self.steps_log = []
+        self.explored_routes = 0
         
-    def calculate_route_distance(self, route):
+    def calculate_route_distance(self, route: List[int]) -> float:
         """Tính tổng khoảng cách của một tuyến đường"""
         total_distance = 0
         for i in range(len(route) - 1):
-            city1 = self.cities.index(route[i])
-            city2 = self.cities.index(route[i + 1])
-            total_distance += self.distance_matrix[city1][city2]
+            total_distance += self.distance_matrix[route[i]][route[i + 1]]
         # Quay về thành phố xuất phát
-        city1 = self.cities.index(route[-1])
-        city2 = self.cities.index(route[0])
-        total_distance += self.distance_matrix[city1][city2]
+        total_distance += self.distance_matrix[route[-1]][route[0]]
         return total_distance
     
-    def solve(self):
+    def backtrack(self, current_route: List[int], unvisited: set, current_distance: float):
         """
-        Giải bài toán TSP bằng Backtracking (tự triển khai)
-        Thuật toán: Depth-first search (hoặc brute-force với pruning theo best_distance)
+        Hàm backtracking - khám phá tất cả các tuyến đường có thể
+        
+        Args:
+            current_route: Tuyến đường hiện tại (danh sách index thành phố)
+            unvisited: Tập hợp các thành phố chưa được thăm
+            current_distance: Khoảng cách tích lũy từ đầu
+        """
+        self.explored_routes += 1
+        
+        # Nếu đã thăm hết tất cả các thành phố
+        if len(unvisited) == 0:
+            # Tính khoảng cách để quay về thành phố xuất phát
+            final_distance = current_distance + self.distance_matrix[current_route[-1]][current_route[0]]
+            
+            if final_distance < self.best_distance:
+                self.best_distance = final_distance
+                self.best_route = current_route[:]
+                log_msg = f"Tìm tuyến đường tốt hơn: {self.best_distance:.2f}"
+                self.steps_log.append(log_msg)
+            return
+        
+        # Pruning: nếu khoảng cách hiện tại đã vượt quá best_distance, bỏ qua nhánh này
+        if current_distance >= self.best_distance:
+            return
+        
+        # Thử tất cả các thành phố chưa thăm
+        for next_city in list(unvisited):
+            distance_to_next = self.distance_matrix[current_route[-1]][next_city]
+            
+            # Ghi lại bước
+            if len(self.steps_log) < 50:  # Giới hạn log để không quá dài
+                log_msg = f"→ Đi từ {self.cities[current_route[-1]]} sang {self.cities[next_city]} "
+                log_msg += f"(khoảng cách: {distance_to_next:.2f}, tích lũy: {current_distance + distance_to_next:.2f})"
+                self.steps_log.append(log_msg)
+            
+            # Thêm thành phố vào tuyến đường
+            current_route.append(next_city)
+            unvisited.remove(next_city)
+            
+            # Gọi đệ quy
+            self.backtrack(current_route, unvisited, current_distance + distance_to_next)
+            
+            # Quay lui (backtrack)
+            current_route.pop()
+            unvisited.add(next_city)
+    
+    def solve(self, verbose: bool = False) -> dict:
+        """
+        Giải bài toán TSP bằng Backtracking
+        
+        Args:
+            verbose: In chi tiết các bước
+            
+        Returns:
+            dict: Kết quả gồm tuyến đường, khoảng cách, thời gian, log
         """
         start_time = time.time()
-        # Implement a minimal CSP-style backtracking framework here so code
-        # explicitly uses variables, domains, constraints and an assignment.
-
-        # Variables: position_0 ... position_{n-1}
-        variables = [f'position_{i}' for i in range(self.n_cities)]
-
-        # Domains: all cities for each variable
-        domains = {var: list(self.cities) for var in variables}
-
-        # Constraints: functions that accept (assignment) partial dict and return True/False
-        def all_different(assignment):
-            # All assigned values must be unique
-            vals = list(assignment.values())
-            return len(vals) == len(set(vals))
-
-        def partial_distance_constraint(assignment):
-            # For any consecutive assigned positions, the partial accumulated distance
-            # should not exceed the current best distance (pruning)
-            # Build ordered list of assigned positions by position index
-            if not assignment:
-                return True
-            # Extract assigned positions and their numeric indices
-            assigned = []
-            for var, val in assignment.items():
-                idx = int(var.split('_')[1])
-                assigned.append((idx, val))
-            assigned.sort()
-
-            # compute partial distance along the assigned prefix
-            partial = 0
-            for i in range(len(assigned) - 1):
-                a_city = assigned[i][1]
-                b_city = assigned[i+1][1]
-                a_idx = self.cities.index(a_city)
-                b_idx = self.cities.index(b_city)
-                partial += self.distance_matrix[a_idx][b_idx]
-                if partial >= self.best_distance:
-                    return False
-            return True
-
-        constraints = [all_different, partial_distance_constraint]
-
-        # Backtracking driver: assign variables in order
-        assignment = {}
-
-        def is_consistent(assignment):
-            # Evaluate all constraints on the current partial assignment
-            for c in constraints:
-                try:
-                    if not c(assignment):
-                        return False
-                except Exception:
-                    return False
-            return True
-
-        def backtrack_var(idx):
-            # idx: index of variable to assign
-            if idx >= len(variables):
-                # full assignment -> evaluate total distance including return-to-start
-                route = [assignment[var] for var in variables]
-                dist = self.calculate_route_distance(route)
-                if dist < self.best_distance:
-                    self.best_distance = dist
-                    self.best_route = route.copy()
-                return
-
-            var = variables[idx]
-            for value in domains[var]:
-                # try assign
-                assignment[var] = value
-                if is_consistent(assignment):
-                    backtrack_var(idx+1)
-                # undo
-                assignment.pop(var, None)
-
-        # To reduce symmetric solutions, fix starting position to first city
-        assignment[variables[0]] = self.cities[0]
-        if is_consistent(assignment):
-            backtrack_var(1)
+        
+        if verbose:
+            print(f"\n{'='*70}")
+            print(f"THUẬT TOÁN BACKTRACKING - GIẢI BÀI TOÁN NGƯỜI DU LỊCH")
+            print(f"{'='*70}")
+            print(f"Số thành phố: {self.n_cities}")
+            print(f"Danh sách thành phố: {', '.join(self.cities)}")
+            print(f"Phương pháp: Quay lui (Backtracking)")
+            print(f"Độ phức tạp: O(n!) - Tất cả các hoán vị")
+            print(f"{'='*70}\n")
+        
+        # Bắt đầu từ thành phố 0
+        initial_route = [0]
+        unvisited = set(range(1, self.n_cities))
+        
+        self.backtrack(initial_route, unvisited, 0)
         
         self.execution_time = time.time() - start_time
-
+        
+        # Chuyển đổi route từ index sang tên thành phố
+        best_route_names = [self.cities[i] for i in self.best_route]
+        
+        if verbose:
+            print(f"\nKếT QUẢ:")
+            print(f"Tuyến đường tốt nhất: {' -> '.join(best_route_names)} -> {best_route_names[0]}")
+            print(f"Tổng khoảng cách: {self.best_distance:.2f} km")
+            print(f"Thời gian thực thi: {self.execution_time:.4f} giây")
+            print(f"Số tuyến đường khám phá: {self.explored_routes}")
+            print(f"{'='*70}\n")
+        
         return {
-            'route': self.best_route,
+            'route': best_route_names,
             'distance': self.best_distance,
             'time': self.execution_time,
-            'algorithm': 'Backtracking (custom)'
+            'algorithm': 'Backtracking (Quay lui)',
+            'explored_routes': self.explored_routes,
+            'steps': self.steps_log
         }
-    
-    def greedy_fallback(self):
-        """
-        Phương pháp dự phòng: sử dụng greedy approach nếu backtracking không tìm được
-        """
-        route = [self.cities[0]]
-        unvisited = set(self.cities[1:])
-        
-        while unvisited:
-            current_city = route[-1]
-            current_idx = self.cities.index(current_city)
-            
-            # Tìm thành phố gần nhất chưa được thăm
-            nearest_city = min(unvisited, 
-                             key=lambda city: self.distance_matrix[current_idx][self.cities.index(city)])
-            route.append(nearest_city)
-            unvisited.remove(nearest_city)
-        
-        self.best_route = route
-        self.best_distance = self.calculate_route_distance(route)
-
-
-if __name__ == "__main__":
-    # Test với dữ liệu mẫu
-    cities = ['Hà Nội', 'Hải Phòng', 'Đà Nẵng', 'TP.HCM', 'Cần Thơ']
-    
-    # Ma trận khoảng cách (km)
-    distance_matrix = np.array([
-        [0, 120, 764, 1710, 1840],
-        [120, 0, 840, 1830, 1960],
-        [764, 840, 0, 964, 1094],
-        [1710, 1830, 964, 0, 169],
-        [1840, 1960, 1094, 169, 0]
-    ])
-    
-    solver = TSPBacktracking(cities, distance_matrix)
-    result = solver.solve()
-    
-    print(f"Thuật toán: {result['algorithm']}")
-    print(f"Tuyến đường tốt nhất: {' -> '.join(result['route'])} -> {result['route'][0]}")
-    print(f"Tổng khoảng cách: {result['distance']:.2f} km")
-    print(f"Thời gian thực thi: {result['time']:.4f} giây")

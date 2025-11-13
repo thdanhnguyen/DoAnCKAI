@@ -1,15 +1,15 @@
 """
-Travelling Salesman Problem - Ant Colony Optimization Solution
-Giải bài toán người du lịch bằng thuật toán ACO (Ant Colony Optimization)
+Travelling Salesman Problem - Ant Colony Optimization (No Library)
+Giải bài toán người du lịch bằng thuật toán tối ưu hóa đàn kiến
 """
 
-import numpy as np
 import time
+import random
 from typing import List, Tuple
 
 class TSP_ACO:
-    def __init__(self, cities: List[str], distance_matrix: np.ndarray,
-                 n_ants: int = 20, n_iterations: int = 100,
+    def __init__(self, cities: List[str], distance_matrix,
+                 n_ants: int = 20, n_iterations: int = 50,
                  alpha: float = 1.0, beta: float = 2.0,
                  evaporation_rate: float = 0.5, q: float = 100):
         """
@@ -18,12 +18,12 @@ class TSP_ACO:
         Args:
             cities: Danh sách tên các thành phố
             distance_matrix: Ma trận khoảng cách giữa các thành phố
-            n_ants: Số lượng kiến trong mỗi iteration
-            n_iterations: Số lượng iteration
-            alpha: Tham số ảnh hưởng của pheromone
-            beta: Tham số ảnh hưởng của heuristic (khoảng cách)
+            n_ants: Số lượng kiến
+            n_iterations: Số lần lặp
+            alpha: Trọng số pheromone
+            beta: Trọng số heuristic (khoảng cách)
             evaporation_rate: Tỷ lệ bay hơi pheromone
-            q: Hằng số cho việc cập nhật pheromone
+            q: Hằng số cập nhật pheromone
         """
         self.cities = cities
         self.distance_matrix = distance_matrix
@@ -36,19 +36,20 @@ class TSP_ACO:
         self.q = q
         
         # Khởi tạo ma trận pheromone
-        self.pheromone = np.ones((self.n_cities, self.n_cities))
+        self.pheromone = [[1.0 for _ in range(self.n_cities)] for _ in range(self.n_cities)]
         
-        # Khởi tạo ma trận heuristic (nghịch đảo khoảng cách)
-        self.heuristic = np.zeros((self.n_cities, self.n_cities))
+        # Tính toán ma trận heuristic (nghịch đảo khoảng cách)
+        self.heuristic = [[0.0 for _ in range(self.n_cities)] for _ in range(self.n_cities)]
         for i in range(self.n_cities):
             for j in range(self.n_cities):
-                if i != j and self.distance_matrix[i][j] > 0:
-                    self.heuristic[i][j] = 1.0 / self.distance_matrix[i][j]
+                if i != j and distance_matrix[i][j] > 0:
+                    self.heuristic[i][j] = 1.0 / distance_matrix[i][j]
         
         self.best_route = None
         self.best_distance = float('inf')
         self.execution_time = 0
         self.convergence_data = []
+        self.steps_log = []
         
     def calculate_route_distance(self, route: List[int]) -> float:
         """Tính tổng khoảng cách của một tuyến đường"""
@@ -62,30 +63,37 @@ class TSP_ACO:
     def select_next_city(self, current_city: int, unvisited: List[int]) -> int:
         """
         Chọn thành phố tiếp theo dựa trên xác suất
-        Xác suất phụ thuộc vào pheromone và heuristic
+        Xác suất = (pheromone^alpha) * (heuristic^beta)
         """
         probabilities = []
+        total_probability = 0
         
         for city in unvisited:
-            pheromone_value = self.pheromone[current_city][city] ** self.alpha
-            heuristic_value = self.heuristic[current_city][city] ** self.beta
-            probabilities.append(pheromone_value * heuristic_value)
+            pheromone_value = (self.pheromone[current_city][city] ** self.alpha)
+            heuristic_value = (self.heuristic[current_city][city] ** self.beta)
+            probability = pheromone_value * heuristic_value
+            probabilities.append(probability)
+            total_probability += probability
         
         # Chuẩn hóa xác suất
-        total = sum(probabilities)
-        if total == 0:
-            return np.random.choice(unvisited)
+        if total_probability == 0:
+            return random.choice(unvisited)
         
-        probabilities = [p / total for p in probabilities]
+        probabilities = [p / total_probability for p in probabilities]
         
-        # Chọn thành phố dựa trên xác suất
-        next_city = np.random.choice(unvisited, p=probabilities)
-        return next_city
+        # Chọn dựa trên xác suất dùng roulette wheel selection
+        rand = random.random()
+        cumulative = 0
+        for i, city in enumerate(unvisited):
+            cumulative += probabilities[i]
+            if rand <= cumulative:
+                return city
+        
+        return unvisited[-1]
     
     def construct_solution(self) -> Tuple[List[int], float]:
-        """Xây dựng một giải pháp (tuyến đường) cho một con kiến"""
-        # Bắt đầu từ thành phố ngẫu nhiên
-        start_city = np.random.randint(0, self.n_cities)
+        """Xây dựng một tuyến đường cho một con kiến"""
+        start_city = random.randint(0, self.n_cities - 1)
         route = [start_city]
         unvisited = list(range(self.n_cities))
         unvisited.remove(start_city)
@@ -101,29 +109,48 @@ class TSP_ACO:
         return route, distance
     
     def update_pheromone(self, all_routes: List[Tuple[List[int], float]]):
-        """Cập nhật ma trận pheromone dựa trên các tuyến đường đã tìm được"""
-        # Bay hơi pheromone
-        self.pheromone *= (1 - self.evaporation_rate)
+        """Cập nhật ma trận pheromone"""
+        # Bay hơi pheromone (tất cả)
+        for i in range(self.n_cities):
+            for j in range(self.n_cities):
+                self.pheromone[i][j] *= (1 - self.evaporation_rate)
         
-        # Thêm pheromone mới
+        # Thêm pheromone mới từ các kiến
         for route, distance in all_routes:
             pheromone_deposit = self.q / distance
             for i in range(len(route) - 1):
                 self.pheromone[route[i]][route[i + 1]] += pheromone_deposit
                 self.pheromone[route[i + 1]][route[i]] += pheromone_deposit
-            # Cạnh quay về
+            
+            # Cạnh quay về thành phố xuất phát
             self.pheromone[route[-1]][route[0]] += pheromone_deposit
             self.pheromone[route[0]][route[-1]] += pheromone_deposit
     
-    def solve(self) -> dict:
+    def solve(self, verbose: bool = False) -> dict:
         """
-        Giải bài toán TSP bằng thuật toán ACO
+        Giải bài toán TSP bằng ACO
+        
+        Args:
+            verbose: In chi tiết các bước
+            
+        Returns:
+            dict: Kết quả gồm tuyến đường, khoảng cách, thời gian, log
         """
         start_time = time.time()
         
-        print(f"\n{'='*60}")
-        print(f"Bắt đầu thuật toán ACO với {self.n_ants} kiến, {self.n_iterations} iterations")
-        print(f"{'='*60}\n")
+        if verbose:
+            print(f"\n{'='*70}")
+            print(f"THUẬT TOÁN ACO (ANT COLONY OPTIMIZATION)")
+            print(f"{'='*70}")
+            print(f"Số thành phố: {self.n_cities}")
+            print(f"Danh sách thành phố: {', '.join(self.cities)}")
+            print(f"Số kiến: {self.n_ants}")
+            print(f"Số iterations: {self.n_iterations}")
+            print(f"Tham số Alpha (pheromone): {self.alpha}")
+            print(f"Tham số Beta (heuristic): {self.beta}")
+            print(f"Tỷ lệ bay hơi: {self.evaporation_rate}")
+            print(f"Q constant: {self.q}")
+            print(f"{'='*70}\n")
         
         for iteration in range(self.n_iterations):
             all_routes = []
@@ -137,6 +164,10 @@ class TSP_ACO:
                 if distance < self.best_distance:
                     self.best_distance = distance
                     self.best_route = route
+                    
+                    if verbose and len(self.steps_log) < 20:
+                        log_msg = f"Iteration {iteration + 1}: Tìm tuyến đường tốt hơn: {self.best_distance:.2f} km"
+                        self.steps_log.append(log_msg)
             
             # Cập nhật pheromone
             self.update_pheromone(all_routes)
@@ -144,8 +175,7 @@ class TSP_ACO:
             # Lưu dữ liệu hội tụ
             self.convergence_data.append(self.best_distance)
             
-            # In tiến trình
-            if (iteration + 1) % 10 == 0:
+            if verbose and (iteration + 1) % 10 == 0:
                 print(f"Iteration {iteration + 1}/{self.n_iterations}: "
                       f"Khoảng cách tốt nhất = {self.best_distance:.2f} km")
         
@@ -154,36 +184,26 @@ class TSP_ACO:
         # Chuyển đổi route từ index sang tên thành phố
         best_route_names = [self.cities[i] for i in self.best_route]
         
-        print(f"\n{'='*60}")
-        print(f"Hoàn thành! Thời gian: {self.execution_time:.4f} giây")
-        print(f"{'='*60}\n")
+        if verbose:
+            print(f"\nKết quả:")
+            print(f"Tuyến đường tốt nhất: {' -> '.join(best_route_names)} -> {best_route_names[0]}")
+            print(f"Tổng khoảng cách: {self.best_distance:.2f} km")
+            print(f"Thời gian thực thi: {self.execution_time:.4f} giây")
+            print(f"{'='*70}\n")
         
         return {
             'route': best_route_names,
             'distance': self.best_distance,
             'time': self.execution_time,
             'algorithm': 'ACO (Ant Colony Optimization)',
-            'convergence': self.convergence_data
+            'convergence': self.convergence_data,
+            'steps': self.steps_log,
+            'parameters': {
+                'n_ants': self.n_ants,
+                'n_iterations': self.n_iterations,
+                'alpha': self.alpha,
+                'beta': self.beta,
+                'evaporation_rate': self.evaporation_rate,
+                'q': self.q
+            }
         }
-
-
-if __name__ == "__main__":
-    # Test với dữ liệu mẫu
-    cities = ['Hà Nội', 'Hải Phòng', 'Đà Nẵng', 'TP.HCM', 'Cần Thơ']
-    
-    # Ma trận khoảng cách (km)
-    distance_matrix = np.array([
-        [0, 120, 764, 1710, 1840],
-        [120, 0, 840, 1830, 1960],
-        [764, 840, 0, 964, 1094],
-        [1710, 1830, 964, 0, 169],
-        [1840, 1960, 1094, 169, 0]
-    ])
-    
-    solver = TSP_ACO(cities, distance_matrix, n_ants=20, n_iterations=100)
-    result = solver.solve()
-    
-    print(f"Thuật toán: {result['algorithm']}")
-    print(f"Tuyến đường tốt nhất: {' -> '.join(result['route'])} -> {result['route'][0]}")
-    print(f"Tổng khoảng cách: {result['distance']:.2f} km")
-    print(f"Thời gian thực thi: {result['time']:.4f} giây")
